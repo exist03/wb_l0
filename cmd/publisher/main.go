@@ -30,7 +30,7 @@ func main() {
 	fmt.Scan(&path)
 	b, err := os.ReadFile(path)
 	if err != nil {
-		panic(err)
+		log.Fatalln(err)
 	}
 
 	message := Message{
