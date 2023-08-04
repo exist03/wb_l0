@@ -5,18 +5,11 @@ import (
 	"errors"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/nats-io/nats.go"
-	"github.com/nats-io/nats.go/jetstream"
-	"github.com/rs/zerolog/log"
-	"math/rand"
-	"time"
 	"wb_l0/common"
 	"wb_l0/config"
 	"wb_l0/pkg/logger"
 	"wb_l0/pkg/postgres"
 )
-
-const streamName = "my_stream"
 
 type Repository struct {
 	pool  *pgxpool.Pool
@@ -65,43 +58,10 @@ func (r *Repository) CacheRecovery() error {
 	return nil
 }
 
-func (r *Repository) ConsumeMessages() error {
-	nc, _ := nats.Connect(nats.DefaultURL)
-	defer nc.Drain()
-	js, err := jetstream.New(nc)
+func (r *Repository) Create(id uint32, data []byte) error {
+	_, err := r.pool.Exec(context.Background(), "INSERT INTO wb_table VALUES ($1, $2)", id, data)
 	if err != nil {
 		return err
-	}
-	ctx := context.Background()
-
-	stream, err := js.CreateStream(ctx, jetstream.StreamConfig{
-		Name:     streamName,
-		Subjects: []string{"subject"},
-	})
-	if err != nil {
-		return err
-	}
-	cons, _ := stream.CreateOrUpdateConsumer(ctx, jetstream.ConsumerConfig{
-		InactiveThreshold: 5 * time.Minute,
-		FilterSubject:     "subject",
-	})
-	fetchResult, _ := cons.Fetch(40)
-	for msg := range fetchResult.Messages() {
-		id := rand.Int()
-		id %= 10000000 //maybe change
-		log.Print(id, " smth")
-		_, err := r.pool.Exec(ctx, "INSERT INTO wb_table VALUES ($1, $2)", id, msg.Data())
-		if err != nil {
-			log.Error().Msg(err.Error())
-		}
 	}
 	return nil
-}
-
-func Shutdown() {
-	nc, _ := nats.Connect(nats.DefaultURL)
-	defer nc.Drain()
-	js, _ := jetstream.New(nc)
-	ctx := context.Background()
-	js.DeleteStream(ctx, streamName)
 }
