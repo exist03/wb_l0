@@ -5,6 +5,7 @@ import (
 	"errors"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"sync"
 	"wb_l0/common"
 	"wb_l0/config"
 	"wb_l0/pkg/logger"
@@ -13,6 +14,7 @@ import (
 
 type Repository struct {
 	pool  *pgxpool.Pool
+	mu    sync.RWMutex
 	cache map[int][]byte
 }
 
@@ -27,6 +29,8 @@ func New(ctx context.Context, config config.PsqlStorage) *Repository {
 }
 
 func (r *Repository) Get(id int) ([]byte, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 	bytes, ok := r.cache[id]
 	if !ok {
 		err := r.pool.QueryRow(context.Background(), "SELECT model FROM wb_table WHERE id=$1", id).Scan(&bytes)
@@ -41,6 +45,8 @@ func (r *Repository) Get(id int) ([]byte, error) {
 }
 
 func (r *Repository) CacheRecovery() error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	rows, err := r.pool.Query(context.Background(), "SELECT id, model FROM wb_table")
 	if err != nil {
 		return err
